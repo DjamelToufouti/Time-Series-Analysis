@@ -1,0 +1,337 @@
+---
+title : "Time Series part 2"
+output: github_document
+---
+---
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r}
+data(AirPassengers)
+AirPassengers
+```
+```{r}
+plot(AirPassengers)
+```
+> It shows trends and seasonality
+
+Auto-corellation plot
+
+```{r}
+tmp=acf(AirPassengers,type="cor",plot = FALSE)
+tmp$acf[1:3,1,1]
+plot(tmp)
+```
+Differencing
+
+```{r}
+log_AirPassengers = log(AirPassengers)
+diff_serie = diff(log_AirPassengers,lag=12,difference=1)
+diff_serie2 = diff(log_AirPassengers,lag=12,difference=2)
+
+par(mfrow=c(3,1))
+plot(AirPassengers)
+plot(diff_serie)
+plot(diff_serie2)
+```
+
+> The differenciated series does not seem stationary
+
+Is it a white noise?
+
+```{r}
+Box.test(diff_serie,lag=10,type="Ljung-Box")
+```
+
+> the diff-serie can be assimilated to a white noise.
+
+ACF on the residual serie
+
+```{r}
+tmp=acf(diff_serie,type="cor",plot = FALSE)
+tmp2=acf(diff_serie2,type="cor",plot = FALSE)
+par(mfrow=c(2,1))
+plot(tmp)
+plot(tmp2)
+```
+
+> Almost the same plot where difference = 1 or 2.
+
+
+
+
+#### Example with Google stock price ####
+
+```{r}
+library(ggplot2)
+library(fpp2)
+ggtsdisplay(goog200)
+```
+> We see only a trend. No seosonal patern
+
+
+Differencing
+
+```{r}
+diff_serie = diff(goog)
+ggtsdisplay(diff_serie)
+```
+
+> Auto corellation: 95% of the time the corelation should be inside the band. It is ok to have only a peak (= the 5%)
+
+White Noise
+
+```{r}
+Box.test(diff_serie,lag=25,type="Ljung-Box")
+```
+
+> Large p-value => We have a white noise => Nothing to forecast
+
+
+
+##### ARMA #####
+
+Function arima.sim allows to simulate an ARp.
+
+```{r}
+modele<-list(ar=c(0.8))
+ar1<-arima.sim(modele,1000)
+
+par(mfrow=c(2,2))
+plot.ts(ar1)
+acf(ar1)
+pacf(ar1)
+```
+
+Function arima.sim allows to simulate an MAq
+
+```{r}
+modele<-list(ma=c(0.8))
+ma1<-arima.sim(modele,1000)
+
+par(mfrow=c(2,2))
+plot.ts(ma1)
+acf(ma1)
+pacf(ma1)
+```
+
+
+
+
+
+
+
+Exercices: Income, Unemployment
+
+1- Plot the data. Identify unusual informations. Understand patterns
+2- If necessary, use a Box-Cox transformation (logarithm or power for example)
+3- If necessary, difference the data until it appears stationary
+4- Plot the ACF/PACF of the differenced data and try to determine possible candidate models
+5- Try your chosen models(s) and use the AICc to serach for a better model
+6- Check the residuals from your chosen model by plotting the ACF of the residuals, and doing a Box test of the residuals
+7- If residuals look like white noise calculate forecast. If not, go back to 4-
+
+```{r}
+library(fpp2)
+autoplot(uschange[,c("Income","Unemployment")])
+```
+> No need to transform the data (since there is no evidence of changing variance).
+> No need to differentiate the series because there already appears to be stationary.
+
+Box test to check the check if the series are just white noise or not
+```{r}
+Box.test(uschange[,c("Income")],lag=10,type="Ljung-Box")
+Box.test(uschange[,c("Unemployment")],lag=10,type="Ljung-Box")
+```
+
+> For the first dataset p-value is high => white noise => Nothing to forecast, the best forecast is SES = "mean" in this case (no trend, no season)
+For the second dataset p-value is low => no white noise => we can go further.
+
+ACF and PACF plot to identify possible model ARp or MAq 
+
+```{r}
+par(mfrow=c(2,1))
+ggtsdisplay(uschange[,"Income"])
+ggtsdisplay(uschange[,"Unemployment"])
+```
+
+> The PACF/ACF graphs are suggesting to try first a AR8 model.
+
+ARIMA(8,0,0)
+
+```{r}
+AR8 = Arima(uschange[,"Unemployment"],order=c(8,0,0))
+AR8
+```
+
+Plot of the residuals for the ARIMA(8,0,0) model
+
+```{r}
+checkresiduals(AR8)
+```
+
+> The ACF plot of the residuals from the ARIMA(8,0,0) model shows that all autocorellations are within the threshold limits indicating that the residuals are behaving like white noise. The large p-value reported by the Ljung-Box test also suggests the same.
+
+
+Forecast from the chosen model
+
+```{r}
+autoplot(forecast(AR8))
+```
+
+#### Exercice: Production #### 
+
+```{r}
+library(fpp2)
+Production = uschange[,c("Production")]
+autoplot(Production)
+```
+> No need to transform the data (since there is no evidence of changing variance).
+
+```{r}
+ggtsdisplay(Production)
+```
+> The PACF/ACF graphs are suggesting to try first a AR4, AR12 or MA8 model.
+
+```{r}
+Box.test(Production,lag=10,type="Ljung-Box")
+```
+
+> p-value is low => no white noise => we can go further
+
+
+```{r}
+AR4 = Arima(Production,order=c(4,0,0))
+AR12 = Arima(Production,order=c(12,0,0))
+AR4
+AR12
+```
+
+```{r}
+checkresiduals(AR4)
+checkresiduals(AR12)
+```
+
+> The ACF plot of the residuals from the ARIMA(12,0,0) model shows that all autocorellations are within the threshold limits indicating that the residuals are behaving like white noise. The large p-value reported by the Ljung-Box test also suggests the same.
+For the ARIMA(4,0,0) there is a corellation with Lag 8 and the p-value is rather low.
+=> Best model for forecast = ARIMA(12,0,0)
+
+```{r}
+autoplot(forecast(AR12))
+```
+
+
+#### Exercice: Google #### 
+
+```{r}
+library(fpp2)
+ggtsdisplay(goog)
+```
+> No need to transform the data (since there is no evidence of changing variance).
+> Since there is a trend in the data (confirmed by ACF plot) let's take a first difference of the data.)
+
+```{r}
+diff2_goog = diff(goog, difference=2)
+ggtsdisplay(diff2_goog)
+```
+> The differenced data look stationary and so we will not consider further difference.
+> The PACF/ACF graphs are suggesting to try ARIMA(0,2,1) or ARIMA(0,2,28) model.
+
+```{r}
+Box.test(goog,lag=10,type="Ljung-Box")
+```
+
+> p-value is low => no white noise => we can go further
+
+
+```{r}
+Arima_fit = Arima(goog,order=c(0,2,28))
+Arima_fit2 = Arima(goog,order=c(2,2,28))
+Arima_fit
+Arima_fit2
+```
+
+```{r}
+checkresiduals(Arima_fit)
+checkresiduals(Arima_fit2)
+```
+
+> The ACF plot of the residuals from the ARIMA(12,0,0) model shows that all autocorellations are within the threshold limits indicating that the residuals are behaving like white noise. The large p-value reported by the Ljung-Box test also suggests the same.
+For the ARIMA(4,0,0) there is a corellation with Lag 8 and the p-value is rather low.
+=> Best model for forecast = ARIMA(12,0,0)
+
+```{r}
+autoplot(forecast(Arima_fit))
+```
+
+Split between train and test sets (last 5 days)
+
+```{r}
+goog_train<-head(goog, length(goog)-6)
+goog_test<-tail(goog, 5)
+
+plot(goog_train)
+lines(goog_test,col=2)
+```
+
+```{r}
+Arima_fit_train = Arima(goog_train,order=c(0,2,28))
+autoplot(goog_train) + 
+autolayer(goog_test) +
+autolayer(forecast(Arima_fit_train), series='Arima_fit', PI=FALSE)
+```
+
+
+
+
+
+
+#### Exercice: Covid #### 
+
+```{r}
+covid19 = read.csv('C:/Users/jakam/Documents/R/datasets/WHO-COVID-19-global-data.csv')
+covid19_F=covid19[covid19$Country=="France",]
+covid19_F_nc=ts(covid19_F$New_cases)
+library(forecast)
+library(ggplot2)
+autoplot(covid19_F_nc) +
+ggtitle('Number of new cases of Covid19 in France')+ xlab('days')+
+ylab('Number of new cases of Covid19')
+
+```
+
+> No need to transform the data (since there is no evidence of changing variance).
+> Since there is a trend in the data (confirmed by ACF plot) let's take a first difference of the data.)
+
+```{r}
+diff_covid19_F_nc = diff(covid19_F_nc, difference=3)
+ggtsdisplay(diff_covid19_F_nc)
+```
+> The PACF/ACF graphs are suggesting to try first a ARIMA(0,2,14) model.
+
+```{r}
+Box.test(covid19_F_nc,lag=10,type="Ljung-Box")
+```
+
+> p-value is low => no white noise => we can go further
+
+
+```{r}
+Arima_fit = Arima(covid19_F_nc,order=c(1,2,19))
+Arima_fit
+```
+
+```{r}
+checkresiduals(Arima_fit)
+```
+
+> The ACF plot of the residuals from the ARIMA(12,0,0) model shows that all autocorellations are within the threshold limits indicating that the residuals are behaving like white noise. The large p-value reported by the Ljung-Box test also suggests the same.
+For the ARIMA(4,0,0) there is a corellation with Lag 8 and the p-value is rather low.
+=> Best model for forecast = ARIMA(12,0,0)
+
+```{r}
+autoplot(forecast(Arima_fit))
+```
